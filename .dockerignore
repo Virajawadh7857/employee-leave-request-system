@@ -1,0 +1,18 @@
+# Git repository and IDE settings
+.git/
+.idea/
+
+# Maven build output
+target/
+
+# Angular dependencies and generated files
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Local database configuration containing credentials
+src/main/resources/application.properties
+
+# Environment files containing secrets
+.env
+**/.env
