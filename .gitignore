@@ -34,3 +34,8 @@ build/
 
 # Local database configuration; may contain credentials
 src/main/resources/application.properties
+
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example

@@ -8,8 +8,7 @@ import { LeaveRequest } from '../models/leave-request.model';
 })
 export class LeaveRequestService {
 
-  private readonly apiUrl =
-    'http://localhost:8080/api/leave-requests';
+ private readonly apiUrl = '/api/leave-requests';
 
   constructor(private http: HttpClient) {}
 
