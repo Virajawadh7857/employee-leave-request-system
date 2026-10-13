@@ -69,6 +69,18 @@ pipeline {
             }
         }
 
+        stage('Validate Frontend Nginx Configuration') {
+            steps {
+                sh '''
+                    docker run --rm \
+                        --network leave-request-system_default \
+                        --entrypoint nginx \
+                        leave-request-frontend:${BUILD_NUMBER} \
+                        -t
+                '''
+            }
+        }
+
         stage('Validate Deployment Configuration') {
             steps {
                 script {
