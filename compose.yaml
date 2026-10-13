@@ -77,11 +77,15 @@ services:
     container_name: leave-request-jenkins
     restart: unless-stopped
 
+    group_add:
+      - "0"
+
     ports:
       - "127.0.0.1:8081:8080"
 
     volumes:
       - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
 
     environment:
       JAVA_OPTS: "-Xms128m -Xmx512m -Djava.awt.headless=true"
