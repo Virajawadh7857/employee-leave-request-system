@@ -18,12 +18,17 @@ RUN apt-get update \
     && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" \
        > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends nodejs \
+        && apt-get install -y --no-install-recommends nodejs \
+    && install -d -m 0755 /usr/local/lib/docker/cli-plugins \
+    && curl -fsSL https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-x86_64 \
+       -o /usr/local/lib/docker/cli-plugins/docker-compose \
+    && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose \
     && java -version \
     && mvn -version \
     && node --version \
     && npm --version \
     && docker --version \
+    && docker compose version \
     && rm -rf /var/lib/apt/lists/*
 
 USER jenkins

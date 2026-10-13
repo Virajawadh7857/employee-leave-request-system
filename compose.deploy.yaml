@@ -1,0 +1,37 @@
+services:
+  backend:
+    image: leave-request-backend:${IMAGE_TAG:?Set IMAGE_TAG}
+    container_name: leave-request-backend
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/leave_request_db
+      SPRING_DATASOURCE_USERNAME: leave_app
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Set SPRING_DATASOURCE_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "false"
+
+    networks:
+      - app
+
+  frontend:
+    image: leave-request-frontend:${IMAGE_TAG:?Set IMAGE_TAG}
+    container_name: leave-request-frontend
+    restart: unless-stopped
+
+    depends_on:
+      - backend
+
+    ports:
+      - "4200:80"
+
+    networks:
+      - app
+
+networks:
+  app:
+    external: true
+    name: leave-request-system_default
