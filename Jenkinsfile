@@ -91,27 +91,42 @@ pipeline {
                         sh '''
                             set -eu
 
-                            COMPOSE="docker compose -p leave-request-system -f compose.deploy.yaml"
-
                             echo "Preparing deployment of image tag: $IMAGE_TAG"
 
-                            # Record current image IDs for possible rollback.
-                            OLD_BACKEND_ID="$(docker inspect --format='{{.Image}}' leave-request-backend 2>/dev/null || true)"
-                            OLD_FRONTEND_ID="$(docker inspect --format='{{.Image}}' leave-request-frontend 2>/dev/null || true)"
+                            # Capture the currently deployed image IDs.
+                            OLD_BACKEND_ID="$(docker inspect \
+                                --format='{{.Image}}' \
+                                leave-request-backend 2>/dev/null || true)"
 
-                            # Preserve references to the currently running images.
+                            OLD_FRONTEND_ID="$(docker inspect \
+                                --format='{{.Image}}' \
+                                leave-request-frontend 2>/dev/null || true)"
+
+                            # Preserve the existing images for rollback.
                             if [ -n "$OLD_BACKEND_ID" ]; then
-                                docker image tag "$OLD_BACKEND_ID" leave-request-backend:rollback
+                                docker image tag \
+                                    "$OLD_BACKEND_ID" \
+                                    leave-request-backend:rollback
                             fi
 
                             if [ -n "$OLD_FRONTEND_ID" ]; then
-                                docker image tag "$OLD_FRONTEND_ID" leave-request-frontend:rollback
+                                docker image tag \
+                                    "$OLD_FRONTEND_ID" \
+                                    leave-request-frontend:rollback
                             fi
 
+                            # Use published ports instead of container hostnames.
+                            # Jenkins has already verified these addresses work.
                             check_health() {
-                                curl -fsS http://leave-request-backend:8080/api/leave-requests >/dev/null &&
-                                curl -fsS http://leave-request-frontend/ >/dev/null &&
-                                curl -fsS http://leave-request-frontend/api/leave-requests >/dev/null
+                                curl -fsS --connect-timeout 3 --max-time 5 \
+                                    http://host.docker.internal:8080/api/leave-requests \
+                                    >/dev/null &&
+                                curl -fsS --connect-timeout 3 --max-time 5 \
+                                    http://host.docker.internal:4200/ \
+                                    >/dev/null &&
+                                curl -fsS --connect-timeout 3 --max-time 5 \
+                                    http://host.docker.internal:4200/api/leave-requests \
+                                    >/dev/null
                             }
 
                             wait_for_health() {
@@ -119,6 +134,8 @@ pipeline {
                                 attempt=1
 
                                 while [ "$attempt" -le "$limit" ]; do
+                                    echo "Health check attempt $attempt/$limit"
+
                                     if check_health; then
                                         return 0
                                     fi
@@ -131,12 +148,13 @@ pipeline {
                             }
 
                             rollback() {
-                                if [ -z "$OLD_BACKEND_ID" ] || [ -z "$OLD_FRONTEND_ID" ]; then
-                                    echo "Rollback unavailable: previous image IDs were not captured."
+                                if [ -z "$OLD_BACKEND_ID" ] ||
+                                   [ -z "$OLD_FRONTEND_ID" ]; then
+                                    echo "Rollback unavailable: previous images were not captured."
                                     return 1
                                 fi
 
-                                echo "Attempting rollback to the previous application images..."
+                                echo "Attempting rollback to previous application images..."
 
                                 if ! IMAGE_TAG=rollback docker compose \
                                     -p leave-request-system \
@@ -147,7 +165,7 @@ pipeline {
                                 fi
 
                                 if wait_for_health 30; then
-                                    echo "Rollback completed; previous application images are responding."
+                                    echo "Rollback completed successfully."
                                     return 0
                                 fi
 
@@ -155,7 +173,7 @@ pipeline {
                                 return 1
                             }
 
-                            # Deploy the newly built application images.
+                            # Deploy the new backend and frontend images.
                             if ! docker compose \
                                 -p leave-request-system \
                                 -f compose.deploy.yaml \
@@ -166,31 +184,38 @@ pipeline {
                                 exit 1
                             fi
 
-                            echo "Waiting for backend and frontend health checks..."
+                            echo "Waiting for application health checks..."
 
                             # Allow up to two minutes for application startup.
                             if wait_for_health 60; then
-                                echo "SUCCESS: Backend API and frontend responded successfully."
+                                echo "SUCCESS: Backend API, frontend, and frontend API proxy are responding."
                                 exit 0
                             fi
 
-                            echo "Deployment health checks failed. Collecting logs..."
+                            echo "Deployment health checks failed. Collecting diagnostics..."
 
-echo "=== Backend logs ==="
-docker logs leave-request-backend --tail 80 || true
+                            echo "=== Backend logs ==="
+                            docker logs leave-request-backend --tail 80 || true
 
-echo "=== Frontend logs ==="
-docker logs leave-request-frontend --tail 80 || true
+                            echo "=== Frontend logs ==="
+                            docker logs leave-request-frontend --tail 80 || true
 
-echo "=== Backend API check ==="
-curl -v --max-time 5 http://leave-request-backend:8080/api/leave-requests || true
+                            echo "=== Backend API diagnostic ==="
+                            curl -v --max-time 5 \
+                                http://host.docker.internal:8080/api/leave-requests || true
 
-echo "=== Frontend API check ==="
-curl -v --max-time 5 http://leave-request-frontend/api/leave-requests || true
+                            echo "=== Frontend diagnostic ==="
+                            curl -v --max-time 5 \
+                                http://host.docker.internal:4200/ || true
 
-rollback || true
+                            echo "=== Frontend API proxy diagnostic ==="
+                            curl -v --max-time 5 \
+                                http://host.docker.internal:4200/api/leave-requests || true
 
-                            # Keep the Jenkins build failed even if rollback succeeds.
+                            echo "Attempting rollback..."
+                            rollback || true
+
+                            # Keep the build failed, even when rollback succeeds.
                             exit 1
                         '''
                     }
@@ -201,11 +226,11 @@ rollback || true
 
     post {
         success {
-            echo 'SUCCESS: Tests, frontend build, Docker image builds, deployment, and health checks completed.'
+            echo 'SUCCESS: Backend tests, Angular build, Docker image builds, deployment, and health checks completed.'
         }
 
         failure {
-            echo 'FAILURE: Inspect the failed stage and Console Output. Verify application health before retrying.'
+            echo 'FAILURE: Check the failed stage and diagnostic output. Verify application health before retrying.'
         }
     }
 }
