@@ -21,6 +21,7 @@ pipeline {
                 sh 'mvn -version'
                 sh 'node --version'
                 sh 'npm --version'
+                sh 'docker --version'
             }
         }
 
@@ -54,11 +55,23 @@ pipeline {
                 }
             }
         }
+
+        stage('Build Backend Docker Image') {
+            steps {
+                sh 'docker build -t leave-request-backend:${BUILD_NUMBER} .'
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
+            steps {
+                sh 'docker build -t leave-request-frontend:${BUILD_NUMBER} ./frontend'
+            }
+        }
     }
 
     post {
         success {
-            echo 'SUCCESS: Backend tests and Angular build completed.'
+            echo 'SUCCESS: Backend tests, Angular build, and Docker image builds completed.'
         }
 
         failure {
