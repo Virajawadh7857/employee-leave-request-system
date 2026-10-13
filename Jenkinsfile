@@ -174,8 +174,21 @@ pipeline {
                                 exit 0
                             fi
 
-                            echo "Deployment health checks failed."
-                            rollback || true
+                            echo "Deployment health checks failed. Collecting logs..."
+
+echo "=== Backend logs ==="
+docker logs leave-request-backend --tail 80 || true
+
+echo "=== Frontend logs ==="
+docker logs leave-request-frontend --tail 80 || true
+
+echo "=== Backend API check ==="
+curl -v --max-time 5 http://leave-request-backend:8080/api/leave-requests || true
+
+echo "=== Frontend API check ==="
+curl -v --max-time 5 http://leave-request-frontend/api/leave-requests || true
+
+rollback || true
 
                             # Keep the Jenkins build failed even if rollback succeeds.
                             exit 1
